@@ -1,0 +1,8 @@
+torch~=2.0.1
+torchvision~=0.15.2
+pandas~=2.1.4
+lightning~=2.0.9.post0
+torchcross~=0.0.6
+mimeta-pytorch~=0.0.6
+numpy~=1.24.4
+torchopt~=0.7.2
