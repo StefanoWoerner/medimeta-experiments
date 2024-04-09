@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --ntasks=1                # Number of tasks (see below)
-#SBATCH --cpus-per-task=8         # Number of CPU cores per task
+#SBATCH --cpus-per-task=4         # Number of CPU cores per task
 #SBATCH --nodes=1                 # Ensure that all cores are on one machine
 #SBATCH --time=2-00:00            # Runtime in D-HH:MM
 #SBATCH --partition=2080-preemptable-galvani # Partition to submit to

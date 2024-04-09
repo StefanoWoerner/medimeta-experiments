@@ -27,13 +27,14 @@ finetuning_stepss = [50, 100]
 # learning_rates = []
 # finetuning_stepss = []
 
-# training_type = "mmpft,mmmaml"
+# training_type = "mmpft"
 # training_type = "fully_supervised"
 
-# test_method = "5shot"
 test_method = "5shot"
+# test_method = "1shot"
+# test_method = "fulltest"
 
-test_dir = "./experiments/test"
+test_dir = "./experiments/test/pretrained_2024-02"
 significant_digits = 3
 
 for dataset in datasets:

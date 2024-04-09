@@ -11,7 +11,7 @@ import lightning.pytorch as pl
 import torch
 from lightning.pytorch.loggers import CSVLogger
 
-from mimeta import MIMeta, PickledMIMetaTaskDataset
+from medimeta import MedIMeta, PickledMedIMetaTaskDataset
 from torchcross.models.lightning import (
     SimpleClassifier,
     SimpleCrossDomainClassifier,
@@ -23,19 +23,36 @@ import torchcross as tx
 
 from backbones import resnet18_backbone, resnet50_backbone
 
+checkpoint_basedir = (
+    "/mnt/qb/work/baumgartner/swoerner14/2023-mimeta/mimeta-experiments/experiments"
+)
+
 
 def main(args):
     training_types = args.training_type.split(",")
     checkpoints = ["imagenet_resnet18", "imagenet_resnet50"]
+    checkpoints = [f"{checkpoint_basedir}/{cp}" for cp in checkpoints]
+
     for training_type in training_types:
         checkpoints += glob.glob(
-            f"experiments/20*/{args.target_dataset}*_{training_type}*/**/*.ckpt", recursive=True
+            f"{checkpoint_basedir}/pretrained_2024-02/{args.target_dataset}/{training_type}*/**/best*.ckpt",
+            recursive=True,
         )
 
+    num_checkpoints = len(checkpoints)
+    print(f"steps={args.finetuning_steps}_lr={args.learning_rate}")
+    print(f"Number of checkpoints to test: {num_checkpoints}")
+    print()
     print("Checkpoints:", checkpoints)
 
-    for checkpoint in checkpoints:
+    for i, checkpoint in enumerate(checkpoints):
+        print()
+        print("-----------------------------------")
+        print(f"Testing checkpoint {i}/{num_checkpoints}:")
+        print(checkpoint)
+        print("-----------------------------------")
         ft_and_test_cp(args, checkpoint)
+        print("-----------------------------------")
 
 
 def ft_and_test_cp(args, checkpoint_path):
@@ -48,7 +65,7 @@ def ft_and_test_cp(args, checkpoint_path):
     if target_task_name and target_task_id:
         raise ValueError("Only one of target_task_name and target_task_id can be specified")
     elif target_task_name is None:
-        dataset_info = MIMeta.get_info_dict(data_path, target_dataset_id)
+        dataset_info = MedIMeta.get_info_dict(data_path, target_dataset_id)
         target_task_name = dataset_info["tasks"][target_task_id]["task_name"]
 
     batch_size = 64
@@ -74,7 +91,7 @@ def ft_and_test_cp(args, checkpoint_path):
     ]
 
     # Create the test dataloader
-    metatest_dataset = PickledMIMetaTaskDataset(
+    metatest_dataset = PickledMedIMetaTaskDataset(
         presampled_data_path,
         data_path,
         target_dataset_id,
@@ -93,8 +110,11 @@ def ft_and_test_cp(args, checkpoint_path):
 
     # create unique experiment name and version
     now = datetime.now()
-    save_dir = f"./experiments/{args.test_dir}/{target_dataset_id}_{target_task_name}_5shot_steps={args.finetuning_steps}_lr={args.learning_rate}"
-    experiment_name = f"{checkpoint_path.replace('/', '_')}"
+    save_dir = (
+        f"{args.test_dir}/pretrained_2024-02/{target_dataset_id}_{target_task_name}/5shot"
+        f"_steps={args.finetuning_steps}_lr={args.learning_rate}"
+    )
+    experiment_name = f"{os.path.relpath(checkpoint_path, checkpoint_basedir).replace('/', '_')}"
     version = now.strftime("%Y-%m-%d_%H-%M-%S")
     version_postfix = 0
     while Path(save_dir, experiment_name, f"{version}_{version_postfix}").exists():
@@ -177,16 +197,16 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default="data/MIMeta")
+    parser.add_argument("--data_path", type=str, default="data/MedIMeta")
     parser.add_argument("--target_dataset", type=str, default="oct")
     parser.add_argument("--target_task", type=str, default=None)
     parser.add_argument("--target_task_id", type=int, default=0)
-    parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument("--num_workers", type=int, default=1)
     parser.add_argument("--use_data_augmentation", action="store_true")
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--finetuning_steps", type=int, default=100)
-    parser.add_argument("--presampled_data_path", type=str, default="data/MIMeta_presampled")
-    parser.add_argument("--training_type", type=str, default="fully_supervised")
+    parser.add_argument("--presampled_data_path", type=str, default="data/MedIMeta_presampled")
+    parser.add_argument("--training_type", type=str, default="mmpft")
     parser.add_argument("--backbone", type=str, default="resnet18")
     parser.add_argument("--test_dir", type=str, default="./experiments/test")
 

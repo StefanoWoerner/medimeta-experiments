@@ -10,12 +10,12 @@ from torch.utils.data import DataLoader
 
 import torchcross as tx
 
-from mimeta import MIMeta, get_available_tasks, MultiPickledMIMetaTaskDataset
+from medimeta import MedIMeta, get_available_tasks, MultiPickledMedIMetaTaskDataset
 from torchcross.models.lightning import CrossDomainMAML
 from torchcross.utils.collate_fn import identity
 from torchvision import transforms
 
-from backbones import resnet18_backbone, resnet50_backbone
+from backbones import get_backbone
 
 
 def main(args):
@@ -25,26 +25,30 @@ def main(args):
     target_task_name = args.target_task
     target_task_id = args.target_task_id
     num_workers = args.num_workers
+    batch_size = args.batch_size
 
-    batch_size = 1
-
-    dataset_info = MIMeta.get_info_dict(data_path, target_dataset_id)
+    dataset_info = MedIMeta.get_info_dict(data_path, target_dataset_id)
     if target_task_name and target_task_id:
-        raise ValueError(
-            "Only one of target_task_name and target_task_id can be specified"
-        )
+        raise ValueError("Only one of target_task_name and target_task_id can be specified")
     elif target_task_name is None:
         target_task_name = dataset_info["tasks"][target_task_id]["task_name"]
 
     all_overlaps = dataset_info["domain_overlaps"] + dataset_info["subject_overlaps"]
 
     task_dict = get_available_tasks(data_path)
-    train_val_tasks = [
-        (ds, t)
-        for ds, tasks in task_dict.items()
-        for t in tasks[:1]
-        if ds != target_dataset_id and ds not in all_overlaps
-    ]
+    if args.all_tasks:
+        train_val_tasks = [
+            (ds, t)
+            for ds, tasks in task_dict.items()
+            for t in tasks
+            if ds != target_dataset_id and ds not in all_overlaps
+        ]
+    else:
+        train_val_tasks = [
+            (ds, tasks[0])
+            for ds, tasks in task_dict.items()
+            if ds != target_dataset_id and ds not in all_overlaps
+        ]
 
     augmentation_transforms = []
     if args.use_data_augmentation:
@@ -58,9 +62,7 @@ def main(args):
         augmentation_transforms = [
             transforms.RandomHorizontalFlip(p=0.25),
             transforms.RandomVerticalFlip(p=0.25),
-            transforms.RandomRotation(
-                10, interpolation=transforms.InterpolationMode.BILINEAR
-            ),
+            transforms.RandomRotation(10, interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.RandomApply([random_crop_and_resize], p=0.25),
         ]
     standard_transforms = [
@@ -69,7 +71,7 @@ def main(args):
     ]
 
     # Create the cross-domain meta-dataset from pre-sampled tasks
-    train_dataset = MultiPickledMIMetaTaskDataset(
+    train_dataset = MultiPickledMedIMetaTaskDataset(
         presampled_data_path,
         data_path,
         train_val_tasks,
@@ -80,7 +82,7 @@ def main(args):
         transform=transforms.Compose(augmentation_transforms + standard_transforms),
         # split="train",
     )
-    val_dataset = MultiPickledMIMetaTaskDataset(
+    val_dataset = MultiPickledMedIMetaTaskDataset(
         presampled_data_path,
         data_path,
         train_val_tasks,
@@ -108,7 +110,6 @@ def main(args):
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=batch_size,
-        shuffle=True,
         num_workers=num_workers,
         collate_fn=identity,
         pin_memory=True,
@@ -126,16 +127,12 @@ def main(args):
     eval_num_inner_steps = 32
 
     backbone_name = args.backbone
-    if backbone_name == "resnet18":
-        backbone = resnet18_backbone(pretrained=True)
-    elif backbone_name == "resnet50":
-        backbone = resnet50_backbone(pretrained=True)
-    else:
-        raise ValueError(f"Unknown backbone {backbone_name}")
+    backbone, num_backbone_features = get_backbone(backbone_name)
 
     # Create the lighting model with pre-trained resnet18 backbone
     model = CrossDomainMAML(
-        *backbone,
+        backbone,
+        num_backbone_features,
         outer_optimizer,
         inner_optimizer,
         eval_inner_optimizer,
@@ -145,10 +142,11 @@ def main(args):
 
     # create unique experiment name and version
     now = datetime.now()
-    save_dir = f"./experiments/{now.strftime('%Y-%m-%d')}"
+    save_dir = f"./experiments/pretrained_{now.strftime('%Y-%m')}"
     experiment_name = (
-        f"{target_dataset_id}_{target_task_name}_mmmaml_{backbone_name}_"
-        f"lr={args.learning_rate}_augmentation={args.use_data_augmentation}"
+        f"{target_dataset_id}/mmmaml_{backbone_name}_"
+        f"lr={args.learning_rate}_augmentation={args.use_data_augmentation}_"
+        f"alltasks={args.all_tasks}"
     )
     version = now.strftime("%Y-%m-%d_%H-%M-%S")
     version_postfix = 0
@@ -177,16 +175,16 @@ def main(args):
         ),
     ]
     early_stopping = pl.callbacks.EarlyStopping(
-        monitor="AUROC/metaval/query", patience=10, mode="max"
+        monitor="AUROC/metaval/query", patience=5, mode="max"
     )
 
     # Create the lightning trainer
     trainer = pl.Trainer(
-        max_steps=500_000,
+        # max_steps=500_000,
         # val_check_interval=0.5,
-        check_val_every_n_epoch=None,
-        val_check_interval=2000,
-        limit_val_batches=200,
+        # check_val_every_n_epoch=None,
+        # val_check_interval=2000,
+        # limit_val_batches=200,
         logger=[tb_logger, csv_logger],
         callbacks=checkpoint_callbacks + [early_stopping],
     )
@@ -199,16 +197,16 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default="data/MIMeta")
-    parser.add_argument(
-        "--presampled_data_path", type=str, default="data/MIMeta_presampled"
-    )
+    parser.add_argument("--data_path", type=str, default="data/MedIMeta")
+    parser.add_argument("--presampled_data_path", type=str, default="data/MIMeta_presampled")
     parser.add_argument("--target_dataset", type=str, default="oct")
     parser.add_argument("--target_task", type=str, default=None)
     parser.add_argument("--target_task_id", type=int, default=0)
-    parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument("--num_workers", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--use_data_augmentation", action="store_true")
+    parser.add_argument("--all_tasks", action="store_true")
     parser.add_argument("--learning_rate", type=float, default=1e-3)
-    parser.add_argument("--backbone", type=str, default="resnet18")
+    parser.add_argument("--backbone", type=str, default="dummy")
 
     main(parser.parse_args())

@@ -9,7 +9,7 @@ import lightning.pytorch as pl
 import torch
 from lightning.pytorch.loggers import CSVLogger
 
-from mimeta import MIMeta, PickledMIMetaTaskDataset
+from medimeta import MedIMeta, PickledMedIMetaTaskDataset
 from torchcross.models.lightning import (
     SimpleClassifier,
     SimpleCrossDomainClassifier,
@@ -33,7 +33,7 @@ def main(args):
     if target_task_name and target_task_id:
         raise ValueError("Only one of target_task_name and target_task_id can be specified")
     elif target_task_name is None:
-        dataset_info = MIMeta.get_info_dict(data_path, target_dataset_id)
+        dataset_info = MedIMeta.get_info_dict(data_path, target_dataset_id)
         target_task_name = dataset_info["tasks"][target_task_id]["task_name"]
 
     batch_size = 64
@@ -59,7 +59,7 @@ def main(args):
     ]
 
     # Create the test dataloader
-    metatest_dataset = PickledMIMetaTaskDataset(
+    metatest_dataset = PickledMedIMetaTaskDataset(
         presampled_data_path,
         data_path,
         target_dataset_id,
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default="data/MIMeta")
+    parser.add_argument("--data_path", type=str, default="data/MedIMeta")
     parser.add_argument("--target_dataset", type=str, default="oct")
     parser.add_argument("--target_task", type=str, default=None)
     parser.add_argument("--target_task_id", type=int, default=0)

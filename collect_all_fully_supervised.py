@@ -1,4 +1,6 @@
 import glob
+import os
+
 import pandas as pd
 
 datasets = [
@@ -23,24 +25,54 @@ datasets = [
     "skinl_derm",
 ]
 
-collection_dir = "./experiments/test_selection/fulltest_selection"
+collection_dir = "./experiments/test/fullsup_2024-02"
+ending = "fulltest_all_aggregated.csv"
 
 
 def main():
     dfs = []
-    for dataset in datasets:
-        csv_paths = glob.glob(f"{collection_dir}/{dataset}*.csv")
-        if len(csv_paths) == 0:
-            continue
-        csv_path = csv_paths[0]
-        df = pd.read_csv(csv_path, index_col=0)
-        df["Dataset"] = dataset
-        dfs.append(df)
+    for dataset in sorted(datasets):
+        csv_paths = glob.glob(f"{collection_dir}/{dataset}*{ending}")
+        for csv_path in csv_paths[:1]:
+            df = pd.read_csv(csv_path, index_col=0)
+            df["Dataset"] = dataset
+            df["Task Name"] = os.path.basename(csv_path)[len(dataset) + 1 : -len(ending) - 1]
+            conditions = (
+                (
+                    (
+                        (df["Backbone"] == "ResNet18")
+                        & (
+                            (df["Learning Rate"] == "0.001")
+                            | (df["Learning Rate"] == "no training")
+                        )
+                    )
+                    | (
+                        (df["Backbone"] == "ResNet50")
+                        & (
+                            (df["Learning Rate"] == "0.0001")
+                            | (df["Learning Rate"] == "no training")
+                        )
+                    )
+                )
+                & (
+                    (df["Data Augmentation"] == "no training")
+                    | (df["Data Augmentation"] == "True")
+                )
+                # & ((df["Checkpoint Metric"] == "best-AUROC") | (df["Checkpoint Metric"] == np.nan))
+            )
+
+            df = df[conditions]
+            dfs.append(df)
 
     result = pd.concat(dfs)
     # restructure the dataframe so that there is one row per backbone and one column per dataset
-    result = result.pivot(index="Backbone", columns="Dataset", values="mean auroc")
+    result = result.pivot(
+        index=["Backbone", "Checkpoint Metric"],
+        columns=["Dataset", "Task Name"],
+        values="mean auroc",
+    )
     print(result)
+    result.to_pickle(f"{collection_dir}.pkl")
     result.to_csv(f"{collection_dir}.csv")
 
 

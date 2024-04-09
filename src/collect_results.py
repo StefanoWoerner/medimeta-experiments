@@ -3,7 +3,7 @@ import glob
 import pandas as pd
 
 
-from mimeta import MIMeta
+from medimeta import MedIMeta
 
 
 def main(args):
@@ -18,7 +18,7 @@ def main(args):
     if target_task_name and target_task_id:
         raise ValueError("Only one of target_task_name and target_task_id can be specified")
     elif target_task_name is None:
-        dataset_info = MIMeta.get_info_dict(data_path, target_dataset_id)
+        dataset_info = MedIMeta.get_info_dict(data_path, target_dataset_id)
         target_task_name = dataset_info["tasks"][target_task_id]["task_name"]
 
     if args.finetuning_steps is not None or args.learning_rate is not None:
@@ -27,7 +27,7 @@ def main(args):
         test_properties = ""
 
     metrics_dirs = glob.glob(
-        f"{test_dir}/{target_dataset_id}_{target_task_name}_{test_method}{test_properties}/*"
+        f"{test_dir}/{target_dataset_id}_{target_task_name}/{test_method}{test_properties}/*"
     )
 
     print("Metrics Dirs:", metrics_dirs)
@@ -94,6 +94,26 @@ def main(args):
         else:
             return aug_chunks[0]
 
+    def get_loss_scaling(x):
+        loss_scaling_chunks = [
+            chunk[16:] for chunk in x.split("_") if chunk.startswith("scale-task-loss=")
+        ]
+        if len(loss_scaling_chunks) == 0:
+            return "not applicable"
+        elif len(loss_scaling_chunks) > 1:
+            raise ValueError("More than one loss scaling chunk")
+        else:
+            return loss_scaling_chunks[0]
+
+    def get_alltasks(x):
+        alltasks_chunks = [chunk[9:] for chunk in x.split("_") if chunk.startswith("alltasks=")]
+        if len(alltasks_chunks) == 0:
+            return "not applicable"
+        elif len(alltasks_chunks) > 1:
+            raise ValueError("More than one alltasks chunk")
+        else:
+            return alltasks_chunks[0]
+
     def get_checkpoint_metric_and_step(x):
         checkpoint_name_chunk = x.split("_")[-1]
         parts = checkpoint_name_chunk.split("-")
@@ -110,6 +130,8 @@ def main(args):
     all_aggregated_df["Backbone"] = all_aggregated_df.index.map(get_backbone)
     all_aggregated_df["Learning Rate"] = all_aggregated_df.index.map(get_lr)
     all_aggregated_df["Data Augmentation"] = all_aggregated_df.index.map(get_augmentation)
+    all_aggregated_df["Task Loss Scaling"] = all_aggregated_df.index.map(get_loss_scaling)
+    all_aggregated_df["All Tasks"] = all_aggregated_df.index.map(get_alltasks)
     all_aggregated_df["Checkpoint Metric"], all_aggregated_df["Checkpoint Step"] = zip(
         *all_aggregated_df.index.map(get_checkpoint_metric_and_step)
     )
@@ -141,6 +163,8 @@ def main(args):
         "Backbone",
         "Learning Rate",
         "Data Augmentation",
+        "Task Loss Scaling",
+        "All Tasks",
         "Checkpoint Metric",
         "Checkpoint Step",
         "mean auroc",
@@ -165,16 +189,18 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default="data/MIMeta")
-    parser.add_argument("--target_dataset", type=str, default="oct")
+    parser.add_argument("--data_path", type=str, default="data/MedIMeta")
+    parser.add_argument("--target_dataset", type=str, default="aml")
     parser.add_argument("--target_task", type=str, default=None)
     parser.add_argument("--target_task_id", type=int, default=0)
     parser.add_argument("--learning_rate", type=float, default=None)
     parser.add_argument("--finetuning_steps", type=int, default=None)
-    parser.add_argument("--training_type", type=str, default="fully_supervised")
-    parser.add_argument("--backbone", type=str, default="resnet18")
-    parser.add_argument("--test_method", type=str, default="fulltest")
-    parser.add_argument("--test_dir", type=str, default="./experiments/test")
+    parser.add_argument("--test_method", type=str, default="5shot")
+    parser.add_argument(
+        "--test_dir",
+        type=str,
+        default="/mnt/qb/work/baumgartner/swoerner14/2023-mimeta/mimeta-experiments/experiments/test/pretrained_2024-02",
+    )
     parser.add_argument("--significant_digits", type=int, default=3)
 
     main(parser.parse_args())

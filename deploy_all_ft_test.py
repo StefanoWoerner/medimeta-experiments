@@ -1,33 +1,33 @@
 import os
 
 datasets = [
-    "aml",
-    "bus",
-    "mammo_mass",
-    "mammo_calc",
-    "cxr",
-    "derm",
-    "oct",
+    # "aml",
+    # "bus",
+    # "mammo_mass",
+    # "mammo_calc",
+    # "cxr",
+    # "derm",
+    # "oct",
     "pneumonia",
-    "crc",
+    # "crc",
     "pbc",
-    "fundus",
-    "dr_regular",
-    "dr_uwf",
-    "glaucoma",
-    "organs_axial",
-    "organs_coronal",
-    "organs_sagittal",
-    "skinl_clinic",
-    "skinl_derm",
+    # "fundus",
+    # "dr_regular",
+    # "dr_uwf",
+    # "glaucoma",
+    # "organs_axial",
+    # "organs_coronal",
+    # "organs_sagittal",
+    # "skinl_clinic",
+    # "skinl_derm",
 ]
 
 learning_rates = [1e-3, 1e-2]
 finetuning_stepss = [50, 100]
 
-training_type = "mmpft,mmmaml"
+training_type = "mmmaml"  # "mmpft"  # ,mmmaml"
 
-test_dir = "./experiments/test2"
+test_dir = "./experiments/test"
 
 for dataset in datasets:
     for learning_rate in learning_rates:

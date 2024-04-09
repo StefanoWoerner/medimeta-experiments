@@ -10,7 +10,7 @@ import lightning.pytorch as pl
 import torch
 from lightning.pytorch.loggers import CSVLogger
 
-from mimeta import MIMeta
+from medimeta import MedIMeta
 from torch.utils.data import DataLoader
 from torchcross.models.lightning import (
     SimpleClassifier,
@@ -22,13 +22,29 @@ from torchvision import transforms
 
 from backbones import resnet18_backbone, resnet50_backbone
 
+checkpoint_basedir = (
+    "/mnt/qb/work/baumgartner/swoerner14/2023-mimeta/mimeta-experiments/experiments"
+)
+
 
 def main(args):
     training_types = args.training_type.split(",")
     checkpoints = ["imagenet_resnet18", "imagenet_resnet50"]
+    checkpoints = [f"{checkpoint_basedir}/{cp}" for cp in checkpoints]
+
+    target_task_name = args.target_task
+    target_task_id = args.target_task_id
+
+    if target_task_name and target_task_id:
+        raise ValueError("Only one of target_task_name and target_task_id can be specified")
+    elif target_task_name is None:
+        dataset_info = MedIMeta.get_info_dict(args.data_path, args.target_dataset)
+        target_task_name = dataset_info["tasks"][target_task_id]["task_name"]
+
     for training_type in training_types:
         checkpoints += glob.glob(
-            f"experiments/20*/{args.target_dataset}*_{training_type}*/**/*.ckpt", recursive=True
+            f"{checkpoint_basedir}/fullsup_2024*/{args.target_dataset}_{target_task_name}/{training_type}*/**/best*.ckpt",
+            recursive=True,
         )
 
     print("Dataset:", args.target_dataset)
@@ -50,33 +66,18 @@ def test_cp(args, checkpoint_path):
     if target_task_name and target_task_id:
         raise ValueError("Only one of target_task_name and target_task_id can be specified")
     elif target_task_name is None:
-        dataset_info = MIMeta.get_info_dict(data_path, target_dataset_id)
+        dataset_info = MedIMeta.get_info_dict(data_path, target_dataset_id)
         target_task_name = dataset_info["tasks"][target_task_id]["task_name"]
 
     batch_size = 64
 
-    augmentation_transforms = []
-    if args.use_data_augmentation:
-        random_crop_and_resize = transforms.Compose(
-            [
-                transforms.RandomCrop(200),
-                transforms.Resize(224),
-            ]
-        )
-
-        augmentation_transforms = [
-            transforms.RandomHorizontalFlip(p=0.25),
-            transforms.RandomVerticalFlip(p=0.25),
-            transforms.RandomRotation(10, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.RandomApply([random_crop_and_resize], p=0.25),
-        ]
     standard_transforms = [
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 
     # Create the val dataloader
-    val_dataset = MIMeta(
+    val_dataset = MedIMeta(
         data_path,
         target_dataset_id,
         target_task_name,
@@ -86,7 +87,7 @@ def test_cp(args, checkpoint_path):
     val_dataset.num_channels = 3
 
     # Create the test dataloader
-    test_dataset = MIMeta(
+    test_dataset = MedIMeta(
         data_path,
         target_dataset_id,
         target_task_name,
@@ -115,8 +116,10 @@ def test_cp(args, checkpoint_path):
 
     # create unique experiment name and version
     now = datetime.now()
-    save_dir = f"./experiments/test/{target_dataset_id}_{target_task_name}_fulltest"
-    experiment_name = f"{checkpoint_path.replace('/', '_')}"
+    save_dir = (
+        f"./experiments/test/fullsup_2024-02/{target_dataset_id}_{target_task_name}_fulltest"
+    )
+    experiment_name = f"{os.path.relpath(checkpoint_path, checkpoint_basedir).replace('/', '_')}"
     version = now.strftime("%Y-%m-%d_%H-%M-%S")
     version_postfix = 0
     while Path(save_dir, experiment_name, f"{version}_{version_postfix}").exists():
@@ -182,6 +185,8 @@ def test_cp(args, checkpoint_path):
 
     print("All Test Metrics:", test_metrics)
     df = pd.DataFrame(test_metrics)
+    df_val = pd.DataFrame(val_metrics)
+    df = pd.concat([df, df_val], axis=1)
     df.to_csv(f"{save_dir}/{experiment_name}/{version}_test_metrics.csv")
 
 
@@ -189,12 +194,11 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default="data/MIMeta")
-    parser.add_argument("--target_dataset", type=str, default="oct")
+    parser.add_argument("--data_path", type=str, default="data/MedIMeta")
+    parser.add_argument("--target_dataset", type=str, default="aml")
     parser.add_argument("--target_task", type=str, default=None)
     parser.add_argument("--target_task_id", type=int, default=0)
-    parser.add_argument("--num_workers", type=int, default=8)
-    parser.add_argument("--use_data_augmentation", action="store_true")
+    parser.add_argument("--num_workers", type=int, default=1)
     parser.add_argument("--training_type", type=str, default="fully_supervised")
     parser.add_argument("--backbone", type=str, default="resnet18")
 

@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=4         # Number of CPU cores per task
 #SBATCH --nodes=1                 # Ensure that all cores are on one machine
 #SBATCH --time=3-00:00            # Runtime in D-HH:MM
-#SBATCH --partition=a100-galvani # Partition to submit to
+#SBATCH --partition=2080-preemptable-galvani # Partition to submit to
 #SBATCH --gres=gpu:1              # optionally type and number of gpus
 #SBATCH --mem=40G                 # Memory pool for all cores (see also --mem-per-cpu)
 #SBATCH --output=slurm_output/%j.out  # File to which STDOUT will be written
@@ -24,8 +24,7 @@ conda activate mimeta-experiments
 
 # Run our code
 echo "-------- PYTHON OUTPUT ----------"
-
-python /mnt/qb/work/baumgartner/swoerner14/2023-mimeta/mimeta-experiments/src/cross_domain_maml.py "$@"
+python src/cross_domain_pft.py "$@"
 
 echo "---------------------------------"
 

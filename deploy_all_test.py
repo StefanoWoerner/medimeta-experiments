@@ -24,14 +24,11 @@ datasets = [
 
 training_type = "fully_supervised"
 
-num_workers = 8
-
 for dataset in datasets:
     command = (
         f"sbatch deploy_test.sh "
         f"--data_path=data/MIMeta "
         f"--target_dataset={dataset} "
-        f"--num_workers={num_workers} "
         f"--training_type={training_type}"
     )
     # submit job
